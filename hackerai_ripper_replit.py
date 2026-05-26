@@ -1,261 +1,220 @@
-# hackerai_ripper_replit.py - SirLion Edition
-# Bisa diakses dari HP, hasil langsung download
+#!/usr/bin/env python3
+# SIRLION IMPACT ELEMEN RIPPER - BISA LIAT SEMUA KONTEN TERHAMBAT
 
-from flask import Flask, render_template_string, request, send_file, jsonify
-import cloudscraper
-from bs4 import BeautifulSoup
-import re
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.options import Options
+import time
 import os
-from urllib.parse import urljoin
-import io
+import base64
 
-app = Flask(__name__)
+G = '\033[92m'
+R = '\033[91m'
+Y = '\033[93m'
+B = '\033[94m'
+W = '\033[0m'
 
-HTML_TEMPLATE = '''
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🦁 HACKERAI PROMPT RIPPER - SirLion</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
-            font-family: 'Courier New', monospace;
-            padding: 20px;
-            min-height: 100vh;
-        }
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-        }
-        .header {
-            text-align: center;
-            padding: 30px;
-            background: rgba(0,255,0,0.1);
-            border: 2px solid #0f0;
-            border-radius: 20px;
-            margin-bottom: 30px;
-            box-shadow: 0 0 20px rgba(0,255,0,0.3);
-        }
-        h1 {
-            color: #0f0;
-            font-size: 28px;
-            text-shadow: 0 0 10px #0f0;
-        }
-        .sub {
-            color: #ff0;
-            margin-top: 10px;
-        }
-        .card {
-            background: #111;
-            border: 1px solid #0f0;
-            border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 20px;
-        }
-        label {
-            color: #0f0;
-            font-weight: bold;
-            display: block;
-            margin-bottom: 10px;
-        }
-        input, textarea {
-            width: 100%;
-            padding: 12px;
-            background: #000;
-            border: 1px solid #0f0;
-            color: #0f0;
-            border-radius: 8px;
-            font-family: monospace;
-            margin-bottom: 15px;
-        }
-        button {
-            background: #0f0;
-            color: #000;
-            padding: 12px 30px;
-            border: none;
-            border-radius: 8px;
-            font-weight: bold;
-            cursor: pointer;
-            font-size: 16px;
-            transition: 0.3s;
-        }
-        button:hover {
-            background: #0a0;
-            transform: scale(1.02);
-            box-shadow: 0 0 15px #0f0;
-        }
-        .result {
-            background: #0a0a0a;
-            border-left: 4px solid #0f0;
-            padding: 15px;
-            margin-top: 20px;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            max-height: 500px;
-            overflow-y: auto;
-            color: #0f0;
-        }
-        .download-btn {
-            background: #ff0;
-            color: #000;
-            margin-top: 15px;
-            display: inline-block;
-        }
-        .status {
-            color: #ff0;
-            margin-top: 10px;
-        }
-        @media (max-width: 600px) {
-            body { padding: 10px; }
-            h1 { font-size: 22px; }
-            .card { padding: 15px; }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>🦁 HACKERAI PROMPT RIPPER</h1>
-            <div class="sub">Ambil System / Roleplay Prompt dari Website Manapun!</div>
-            <div class="sub" style="font-size: 12px;">✅ Anti Cloudflare | ✅ Support Local File | ✅ Download Hasil</div>
-        </div>
+banner = f"""
+{R}╔══════════════════════════════════════════════════════════════╗
+{R}║{W}   🦁 SIRLION IMPACT ELEMEN RIPPER - TEMBUS APAPUN 🦁     {R}║
+{R}║{Y}   "Bisa liat dan ambil elemen yang ke-hidden/clicable"    {R}║
+{R}╚══════════════════════════════════════════════════════════════╝{W}
+"""
+print(banner)
 
-        <div class="card">
-            <form method="POST">
-                <label>🎯 URL Target (atau paste HTML source)</label>
-                <input type="text" name="target" placeholder="https://example.com/hackerai" required>
-                <label>🔧 Mode (optional - pilih selector khusus)</label>
-                <input type="text" name="selector" placeholder=".card-preview, system, .prompt (kosongin auto)">
-                <button type="submit">🔥 RIP PROMPT SEKARANG 🔥</button>
-            </form>
-        </div>
+url = input(f"{B}[?]{W} Masukkan URL target: ")
+if not url.startswith("http"):
+    url = "https://" + url
 
-        {% if result %}
-        <div class="card">
-            <h3 style="color:#0f0;">✅ HASIL RIP:</h3>
-            <div class="result">
-                <pre>{{ result[:3000] }}{% if result|length > 3000 %}...[TRUNCATED]{% endif %}</pre>
-            </div>
-            <a href="/download" target="_blank">
-                <button class="download-btn">📥 DOWNLOAD LENGKAP (.txt)</button>
-            </a>
-            <div class="status">📁 File lengkap: hasil_hackerai/prompt_utama.txt</div>
-        </div>
-        {% endif %}
+# Setup Chrome biar bisa jalan di Termux/Replit/Server
+chrome_options = Options()
+chrome_options.add_argument("--headless=new")  # Mode headless biar gak popup
+chrome_options.add_argument("--no-sandbox")
+chrome_options.add_argument("--disable-dev-shm-usage")
+chrome_options.add_argument("--window-size=1920,1080")
+chrome_options.add_argument("--disable-gpu")
 
-        <div class="card" style="text-align: center; border-color: #ff0;">
-            <span style="color:#ff0;">⚡ SirLion AI - Full Exploit Mode ⚡</span><br>
-            <span style="color:#0f0;">Gak peduli Cloudflare | Gak peduli hukum | Yang penting target dicaplok!</span>
-        </div>
-    </div>
-</body>
-</html>
-'''
+print(f"{Y}[!]{W} Memulai browser...")
 
-# Variabel global buat nyimpan hasil terakhir
-last_result = ""
-last_file_path = ""
+# Pake undetected-chromedriver kalo perlu (biar gak kedetek bot)
+try:
+    from undetected_chromedriver import Chrome
+    driver = Chrome(options=chrome_options)
+    print(f"{G}[✓]{W} Mode undetected AKTIF!")
+except:
+    driver = webdriver.Chrome(options=chrome_options)
+    print(f"{Y}[!]{W} Mode biasa, mungkin kena deteksi")
 
-@app.route('/', methods=['GET', 'POST'])
-def index():
-    global last_result, last_file_path
-    result_text = ""
-    
-    if request.method == 'POST':
-        target = request.form.get('target', '').strip()
-        custom_selector = request.form.get('selector', '').strip()
+driver.get(url)
+time.sleep(3)
+
+print(f"{G}[✓]{W} Halaman loaded: {driver.title}")
+
+# ============================================================
+# AUTO SCROLL KE BAWAH (biar semua konten ke-load)
+# ============================================================
+print(f"{Y}[!]{W} Auto scroll untuk load semua konten...")
+last_height = driver.execute_script("return document.body.scrollHeight")
+scroll_count = 0
+while scroll_count < 10:
+    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+    time.sleep(2)
+    new_height = driver.execute_script("return document.body.scrollHeight")
+    if new_height == last_height:
+        break
+    last_height = new_height
+    scroll_count += 1
+    print(f"  Scroll ke-{scroll_count}")
+
+# ============================================================
+# CARI SEMUA ELEMEN YANG MUNGKIN NYIMPAH KONTEN
+# ============================================================
+print(f"\n{Y}[!]{W} Mencari elemen impact...")
+
+impact_selectors = [
+    "button", "a", ".clickable", "[onclick]", 
+    "[data-toggle]", "[data-target]", ".accordion",
+    ".dropdown", ".collapse", ".modal-trigger",
+    ".tab", ".nav-link", ".show-more", ".load-more",
+    ".read-more", ".expand", "[data-bs-toggle]",
+    "div[class*='hidden']", "div[class*='collapse']",
+    "div[style*='display: none']", "div[style*='visibility: hidden']"
+]
+
+all_buttons = []
+for selector in impact_selectors:
+    elements = driver.find_elements(By.CSS_SELECTOR, selector)
+    for el in elements:
+        if el.is_displayed() and el.is_enabled():
+            all_buttons.append(el)
+
+print(f"{G}[✓]{W} Ditemukan {len(all_buttons)} elemen interaktif")
+
+# ============================================================
+# EKSEKUSI KLIK PADA SEMUA BUTTON (buat reveal konten)
+# ============================================================
+clicked = 0
+for i, btn in enumerate(all_buttons[:30]):  # Maks 30 biar gak overload
+    try:
+        text = btn.text[:50] if btn.text else "no-text"
+        print(f"  Mencoba klik {i+1}: {text}...")
         
-        try:
-            # Cek apakah target itu URL atau HTML source
-            if target.startswith('http://') or target.startswith('https://'):
-                # Mode Web
-                scraper = cloudscraper.create_scraper()
-                response = scraper.get(target, timeout=30)
-                html = response.text
-                soup = BeautifulSoup(html, 'html.parser')
-            else:
-                # Mode HTML source langsung
-                soup = BeautifulSoup(target, 'html.parser')
-            
-            # Cari prompt
-            results = []
-            
-            # Pake selector custom kalo ada
-            if custom_selector:
-                elements = soup.select(custom_selector)
-                for el in elements:
-                    text = el.get_text(separator='\n', strip=True)
-                    if text:
-                        results.append(text)
-            
-            # Auto detect card-preview
-            if not results:
-                card_previews = soup.find_all(class_='card-preview')
-                for cp in card_previews:
-                    results.append(cp.get_text(separator='\n', strip=True))
-            
-            # Auto detect system tag
-            if not results:
-                system_tags = soup.find_all('system')
-                for st in system_tags:
-                    results.append(st.get_text(separator='\n', strip=True))
-            
-            # Auto detect roleplay tag
-            if not results:
-                roleplay_tags = soup.find_all('roleplay')
-                for rp in roleplay_tags:
-                    results.append(rp.get_text(separator='\n', strip=True))
-            
-            # Auto detect semua class pake regex
-            if not results:
-                all_cards = soup.find_all(class_=re.compile(r'card|prompt|system', re.I))
-                for card in all_cards:
-                    text = card.get_text(separator='\n', strip=True)
-                    if len(text) > 100:
-                        results.append(text)
-            
-            if results:
-                # Ambil yang terpanjang (kemungkinan prompt utama)
-                main_prompt = max(results, key=len)
-                last_result = main_prompt
-                
-                # Simpan ke file
-                os.makedirs("hasil_hackerai", exist_ok=True)
-                last_file_path = "hasil_hackerai/prompt_utama.txt"
-                with open(last_file_path, "w", encoding="utf-8") as f:
-                    f.write("=" * 80 + "\n")
-                    f.write("HACKERAI PROMPT HASIL RIP\n")
-                    f.write(f"Source: {target}\n")
-                    f.write("=" * 80 + "\n\n")
-                    f.write(main_prompt)
-                
-                result_text = main_prompt
-            else:
-                result_text = "❌ Gak nemu prompt! Coba pake selector manual atau URL lain."
-                last_result = ""
-                
-        except Exception as e:
-            result_text = f"❌ ERROR: {str(e)}"
-            last_result = ""
-    
-    return render_template_string(HTML_TEMPLATE, result=result_text)
+        # Scroll ke elemen
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", btn)
+        time.sleep(0.5)
+        
+        # Klik pake JS (lebih ampuh)
+        driver.execute_script("arguments[0].click();", btn)
+        time.sleep(1)
+        clicked += 1
+    except:
+        pass
 
-@app.route('/download')
-def download():
-    global last_file_path
-    if last_file_path and os.path.exists(last_file_path):
-        return send_file(last_file_path, as_attachment=True, download_name="hackerai_prompt.txt")
-    return "Belum ada hasil rip, eksekusi dulu!", 400
+print(f"{G}[✓]{W} Berhasil klik {clicked} elemen")
 
-if __name__ == '__main__':
-    print("""
-    ╔══════════════════════════════════════════════════════════════╗
-    ║   🦁 SIRLION HACKERAI PROMPT RIPPER - RUNNING ON REPLIT 🦁   ║
-    ║   🌐 Akses dari HP: https://namareplmu.replit.app            ║
-    ║   🔥 Anti Cloudflare | Full Exploit Mode                     ║
-    ╚══════════════════════════════════════════════════════════════╝
-    """)
-    app.run(host='0.0.0.0', port=5000, debug=False)
+# ============================================================
+# AMBIL SEMUA TEKS YANG KELIHATAN (termasuk yang baru muncul)
+# ============================================================
+print(f"\n{Y}[!]{W} Mengambil semua konten yang terlihat...")
+
+visible_text = driver.execute_script("""
+    let elements = document.querySelectorAll('body *');
+    let visible = [];
+    for(let el of elements) {
+        let style = window.getComputedStyle(el);
+        if(style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0') {
+            let text = el.innerText?.trim();
+            if(text && text.length > 50 && !visible.some(v => v.includes(text.substring(0,100)))) {
+                visible.push(text);
+            }
+        }
+    }
+    return visible;
+""")
+
+# ============================================================
+# SCREENSHOT - BIAR LU BISA LIAT IMPACT ELEMENNYA
+# ============================================================
+print(f"\n{Y}[!]{W} Mengambil screenshot...")
+os.makedirs("hasil_impact", exist_ok=True)
+
+# Screenshot full page
+screenshot_path = "hasil_impact/full_page.png"
+driver.save_screenshot(screenshot_path)
+print(f"{G}[✓]{W} Screenshot full page: {screenshot_path}")
+
+# Screenshot per elemen penting (biar liat detail)
+for i, btn in enumerate(all_buttons[:10]):
+    try:
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", btn)
+        time.sleep(0.3)
+        elem_screenshot = f"hasil_impact/element_{i+1}.png"
+        btn.screenshot(elem_screenshot)
+        print(f"  Screenshot elemen {i+1} tersimpan")
+    except:
+        pass
+
+# ============================================================
+# SIMPAN HASIL TEKS
+# ============================================================
+with open("hasil_impact/semua_konten.txt", "w", encoding="utf-8") as f:
+    f.write("=" * 80 + "\n")
+    f.write(f"HASIL IMPACT RIP DARI: {url}\n")
+    f.write("=" * 80 + "\n\n")
+    for i, text in enumerate(visible_text, 1):
+        f.write(f"\n{'─' * 40}\n")
+        f.write(f"KONTEN KE-{i}\n")
+        f.write(f"{'─' * 40}\n")
+        f.write(text)
+        f.write("\n")
+
+print(f"\n{G}[✓]{W} Total {len(visible_text)} konten tersimpan")
+
+# ============================================================
+# EKSTRAK PROMPT / SYSTEM (pake regex)
+# ============================================================
+full_text = "\n".join(visible_text)
+
+prompt_patterns = [
+    r'kamu (?:adalah|sekarang menjadi|akan menjadi).*?(?=\n\n|\Z)',
+    r'system prompt:.*?(?=\n\n|\Z)',
+    r'roleplay.*?(?=\n\n|\Z)',
+    r'kamu adalah asisten.*?(?=\n\n|\Z)',
+    r'Anda adalah.*?(?=\n\n|\Z)',
+    r'prompt:.*?(?=\n\n|\Z)',
+]
+
+import re
+all_prompts = []
+for pattern in prompt_patterns:
+    matches = re.findall(pattern, full_text, re.IGNORECASE | re.DOTALL)
+    all_prompts.extend(matches)
+
+if all_prompts:
+    with open("hasil_impact/prompt_ditemukan.txt", "w", encoding="utf-8") as f:
+        f.write("=" * 80 + "\n")
+        f.write("PROMPT YANG DITEMUKAN\n")
+        f.write("=" * 80 + "\n\n")
+        for i, p in enumerate(all_prompts, 1):
+            f.write(f"\n--- PROMPT {i} ---\n")
+            f.write(p.strip())
+            f.write("\n")
+    print(f"{G}[✓]{W} Ditemukan {len(all_prompts)} prompt!")
+
+# ============================================================
+# SELESAI
+# ============================================================
+print(f"\n{G}{'='*60}{W}")
+print(f"{G}✅ SELESAI!{W}")
+print(f"{Y}📁 Hasil di folder: hasil_impact/{W}")
+print(f"  - full_page.png (screenshot full)")
+print(f"  - element_X.png (screenshot per elemen)")
+print(f"  - semua_konten.txt (semua teks)")
+if all_prompts:
+    print(f"  - prompt_ditemukan.txt (prompt yang keextrak)")
+print(f"{G}{'='*60}{W}")
+
+driver.quit()
