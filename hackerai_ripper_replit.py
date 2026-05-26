@@ -1,39 +1,62 @@
-#!/usr/bin/env python3
-# SIRLION SIMPLE RIPPER - PAKAI INI AJA BOSQUE
-
+from flask import Flask, render_template_string
 import requests
 from bs4 import BeautifulSoup
-import re
-import os
 
-url = input("Masukkan URL target: ")
-if not url.startswith("http"):
-    url = "https://" + url
+app = Flask(__name__)
 
-print(f"Mengambil data dari {url}...")
+HTML_FORM = '''
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SirLion Prompt Ripper</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { background: #0a0a0a; color: #0f0; font-family: monospace; padding: 20px; }
+        input, button { background: #111; color: #0f0; border: 1px solid #0f0; padding: 10px; margin: 5px; width: 80%; }
+        .result { background: #111; padding: 15px; margin-top: 20px; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <h1>🦁 SirLion Prompt Ripper</h1>
+    <form method="POST">
+        <input type="text" name="url" placeholder="https://target.com" required>
+        <button type="submit">🔥 RIP PROMPT 🔥</button>
+    </form>
+    {% if result %}
+        <div class="result"><pre>{{ result }}</pre></div>
+    {% endif %}
+</body>
+</html>
+'''
 
-headers = {'User-Agent': 'Mozilla/5.0'}
-response = requests.get(url, headers=headers)
-soup = BeautifulSoup(response.text, 'html.parser')
+@app.route('/', methods=['GET', 'POST'])
+def index():
+    result = None
+    if request.method == 'POST':
+        url = request.form.get('url')
+        if not url.startswith('http'):
+            url = 'https://' + url
+        
+        try:
+            r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'})
+            soup = BeautifulSoup(r.text, 'html.parser')
+            text = soup.get_text()
+            
+            # Cari prompt
+            keywords = ['kamu adalah', 'Anda adalah', 'system', 'roleplay', 'prompt', 'HACKERAI']
+            found = []
+            for line in text.split('\n'):
+                for kw in keywords:
+                    if kw.lower() in line.lower():
+                        found.append(line)
+                        break
+            
+            result = f"Ditemukan {len(found)} baris prompt:\n\n" + "\n".join(found[:50])
+        except Exception as e:
+            result = f"Error: {str(e)}"
+    
+    return render_template_string(HTML_FORM, result=result)
 
-# Ambil SEMUA teks dari halaman
-semua_teks = soup.get_text(separator='\n', strip=True)
-
-# Cari prompt (pake kata kunci umum)
-kata_kunci = ['kamu adalah', 'Anda adalah', 'system', 'roleplay', 'prompt', 'jailbreak', 'HACKERAI']
-
-hasil = []
-for line in semua_teks.split('\n'):
-    for keyword in kata_kunci:
-        if keyword.lower() in line.lower():
-            hasil.append(line)
-            break
-
-# Simpan
-os.makedirs("hasil_rip", exist_ok=True)
-with open("hasil_rip/prompt_ditemukan.txt", "w", encoding="utf-8") as f:
-    for h in hasil:
-        f.write(h + "\n\n")
-
-print(f"Selesai! Ditemukan {len(hasil)} baris prompt")
-print(f"File: hasil_rip/prompt_ditemukan.txt")
+if __name__ == '__main__':
+    # ★ INI KUNCI AGAR WEBVIEW MUNCUL ★
+    app.run(host='0.0.0.0', port=8080, debug=False)
